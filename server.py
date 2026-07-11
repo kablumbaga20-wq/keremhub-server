@@ -78,8 +78,11 @@ def find_swords(z):
                 print("KILIC BULUNDU:", file)
 
     return found
-
-
+@app.get("/health")
+def health():
+    return jsonify({
+        "status": "ok"
+    }), 200
 @app.route("/")
 def home():
     return jsonify({
