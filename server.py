@@ -15,9 +15,9 @@ with open("config.json", "r", encoding="utf-8") as f:
 # yazılabilir geçici dizini kullanıyoruz.
 TEMP_FOLDER = tempfile.gettempdir()
 
-PACKS_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "packs")
-THUMBNAILS_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "thumbnails")
-BUILDER_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "builder")
+PACKS_FOLDER = "/tmp/packs"
+THUMBNAILS_FOLDER = "/tmp/thumbnails"
+BUILDER_FOLDER = "/tmp/builder"
 
 os.makedirs(PACKS_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAILS_FOLDER, exist_ok=True)
