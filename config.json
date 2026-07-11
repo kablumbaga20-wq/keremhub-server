@@ -1,0 +1,9 @@
+{
+    "host": "0.0.0.0",
+    "port": 5000,
+    "server_name": "KeremHub",
+    "author": "Kerem",
+    "thumbnail_folder": "thumbnails",
+    "packs_folder": "packs",
+    "builder_folder": "builder"
+}
