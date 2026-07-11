@@ -3,6 +3,7 @@ import os
 import json
 import zipfile
 import hashlib
+import tempfile
 from io import BytesIO
 
 app = Flask(__name__)
@@ -10,9 +11,13 @@ app = Flask(__name__)
 with open("config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
-PACKS_FOLDER = CONFIG["packs_folder"]
-THUMBNAILS_FOLDER = CONFIG["thumbnail_folder"]
-BUILDER_FOLDER = CONFIG["builder_folder"]
+# Belmo'da proje dizini read-only olabildiği için
+# yazılabilir geçici dizini kullanıyoruz.
+TEMP_FOLDER = tempfile.gettempdir()
+
+PACKS_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "packs")
+THUMBNAILS_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "thumbnails")
+BUILDER_FOLDER = os.path.join(TEMP_FOLDER, "keremhub", "builder")
 
 os.makedirs(PACKS_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAILS_FOLDER, exist_ok=True)
@@ -36,7 +41,6 @@ def sha256_file(path):
 
 def find_zip(pack_id):
     for file in os.listdir(PACKS_FOLDER):
-
         if not file.lower().endswith(".zip"):
             continue
 
@@ -63,18 +67,14 @@ def find_swords(z):
     found = {}
 
     for file in z.namelist():
-
         lower = file.lower().replace("\\", "/")
 
         if lower.endswith("/"):
             continue
 
         for sword in sword_names:
-
             if lower.endswith("/" + sword) or lower == sword:
-
                 found[sword] = file
-
                 print("KILIC BULUNDU:", file)
 
     return found
@@ -84,17 +84,16 @@ def find_swords(z):
 def home():
     return jsonify({
         "name": CONFIG["server_name"],
-        "status": "online"
+        "status": "online",
+        "packs_folder": PACKS_FOLDER
     })
 
 
 @app.route("/api/packs")
 def api_packs():
-
     packs = []
 
     for file in os.listdir(PACKS_FOLDER):
-
         if not file.lower().endswith(".zip"):
             continue
 
@@ -127,7 +126,6 @@ def api_packs():
 
 @app.get("/api/packs/<pack_id>/pack")
 def download_pack(pack_id):
-
     path = find_zip(pack_id)
 
     if path is None:
@@ -141,7 +139,6 @@ def download_pack(pack_id):
 
 @app.post("/api/packs/request")
 def pack_request():
-
     data = request.get_json(silent=True) or {}
 
     pack_id = (
@@ -187,16 +184,13 @@ def pack_request():
 
 @app.get("/api/packs/<pack_id>/sword")
 def sword_preview(pack_id):
-
     path = find_zip(pack_id)
 
     if path is None:
         return "Pack not found", 404
 
     try:
-
         with zipfile.ZipFile(path, "r") as z:
-
             swords = find_swords(z)
 
             preview_order = [
@@ -211,20 +205,14 @@ def sword_preview(pack_id):
             ]
 
             for sword in preview_order:
-
                 if sword in swords:
-
                     return send_file(
-                        BytesIO(
-                            z.read(swords[sword])
-                        ),
+                        BytesIO(z.read(swords[sword])),
                         mimetype="image/png"
                     )
 
     except Exception as e:
-
         print("SWORD ERROR:", e)
-
         return "Sword error", 500
 
     return "Sword not found", 404
@@ -232,7 +220,6 @@ def sword_preview(pack_id):
 
 @app.get("/api/packs/<pack_id>/swords-pack")
 def swords_pack(pack_id):
-
     path = find_zip(pack_id)
 
     if path is None:
@@ -241,9 +228,7 @@ def swords_pack(pack_id):
     output = BytesIO()
 
     try:
-
         with zipfile.ZipFile(path, "r") as source:
-
             swords = find_swords(source)
 
             if not swords:
@@ -273,15 +258,13 @@ def swords_pack(pack_id):
                 }
 
                 for sword, source_file in swords.items():
-
                     output_name = name_map.get(
                         sword,
                         sword
                     )
 
                     target.writestr(
-                        "assets/minecraft/textures/item/"
-                        + output_name,
+                        "assets/minecraft/textures/item/" + output_name,
                         source.read(source_file)
                     )
 
@@ -293,9 +276,7 @@ def swords_pack(pack_id):
                     )
 
     except Exception as e:
-
         print("SWORDS PACK ERROR:", e)
-
         return "Pack build error", 500
 
     output.seek(0)
@@ -315,20 +296,15 @@ def swords_pack(pack_id):
 
 @app.get("/thumbnails/<path:name>.png")
 def thumbnail(name):
-
     path = find_zip(name)
 
     if path is None:
         return "Not Found", 404
 
     try:
-
         with zipfile.ZipFile(path, "r") as z:
-
             for file in z.namelist():
-
                 if file.lower().endswith("pack.png"):
-
                     return send_file(
                         BytesIO(z.read(file)),
                         mimetype="image/png"
@@ -341,8 +317,9 @@ def thumbnail(name):
 
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", CONFIG.get("port", 8000)))
 
     app.run(
-        host=CONFIG["host"],
-        port=CONFIG["port"]
+        host="0.0.0.0",
+        port=port
     )
