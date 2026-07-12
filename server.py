@@ -13,9 +13,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
-PACKS_FOLDER = CONFIG.get("packs_folder", "/tmp/packs")
-THUMBNAILS_FOLDER = CONFIG.get("thumbnail_folder", "/tmp/thumbnails")
-BUILDER_FOLDER = CONFIG.get("builder_folder", "/tmp/builder")
+PACKS_FOLDER = os.path.join(BASE_DIR, CONFIG.get("packs_folder", "packs"))
+THUMBNAILS_FOLDER = os.path.join(BASE_DIR, CONFIG.get("thumbnail_folder", "thumbnails"))
+BUILDER_FOLDER = os.path.join(BASE_DIR, CONFIG.get("builder_folder", "builder"))
 
 os.makedirs(PACKS_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAILS_FOLDER, exist_ok=True)
