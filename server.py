@@ -36,14 +36,14 @@ def sha256_file(path):
 
 
 def find_zip(pack_id):
-    for file in os.listdir(PACKS_FOLDER):
-        if not file.lower().endswith(".zip"):
+    for filename in os.listdir(PACKS_FOLDER):
+        if not filename.lower().endswith(".zip"):
             continue
 
-        name = os.path.splitext(file)[0]
+        name = os.path.splitext(filename)[0]
 
         if name.lower() == pack_id.lower():
-            return os.path.join(PACKS_FOLDER, file)
+            return os.path.join(PACKS_FOLDER, filename)
 
     return None
 
@@ -62,16 +62,15 @@ def find_swords(z):
 
     found = {}
 
-    for file in z.namelist():
-        lower = file.lower().replace("\\", "/")
+    for filename in z.namelist():
+        lower = filename.lower().replace("\\", "/")
 
         if lower.endswith("/"):
             continue
 
         for sword in sword_names:
             if lower.endswith("/" + sword) or lower == sword:
-                found[sword] = file
-                print("KILIC BULUNDU:", file)
+                found[sword] = filename
 
     return found
 
@@ -83,10 +82,10 @@ def health():
     }), 200
 
 
-@app.route("/")
+@app.get("/")
 def home():
     return jsonify({
-        "name": CONFIG["server_name"],
+        "name": CONFIG.get("server_name", "KeremHub"),
         "packs_folder": PACKS_FOLDER,
         "status": "online"
     })
@@ -98,127 +97,144 @@ def upload_pack():
         files = request.files.getlist("files")
 
         uploaded = []
-        errors = []
+        skipped = []
 
         for file in files:
             if not file or not file.filename:
                 continue
 
-            if not file.filename.lower().endswith(".zip"):
-                errors.append(file.filename)
+            original_name = file.filename.replace("\\", "/")
+
+            if not original_name.lower().endswith(".zip"):
                 continue
 
-            filename = secure_filename(file.filename)
+            filename = secure_filename(
+                os.path.basename(original_name)
+            )
 
             if not filename:
+                skipped.append(original_name)
                 continue
 
             path = os.path.join(PACKS_FOLDER, filename)
-            file.save(path)
 
-            uploaded.append(filename)
+            try:
+                file.save(path)
+
+                if not zipfile.is_zipfile(path):
+                    os.remove(path)
+                    skipped.append(original_name)
+                    continue
+
+                uploaded.append(filename)
+
+            except Exception as e:
+                print("UPLOAD ERROR:", original_name, e)
+
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+
+                skipped.append(original_name)
 
         return render_template_string("""
-        <!DOCTYPE html>
-        <html lang="tr">
-        <head>
-            <meta charset="UTF-8">
-            <title>KeremHub</title>
-        </head>
-        <body>
-            <h1>Yükleme tamamlandı 🚀</h1>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KeremHub</title>
+</head>
+<body>
 
-            <p>{{ count }} pack yüklendi.</p>
+<h1>Yükleme tamamlandı</h1>
 
-            {% if errors %}
-                <h3>Yüklenemeyenler:</h3>
+<h2>{{ count }} pack yüklendi.</h2>
 
-                {% for file in errors %}
-                    <p>{{ file }}</p>
-                {% endfor %}
-            {% endif %}
+{% if skipped %}
+<h3>Atlanan dosyalar:</h3>
 
-            <a href="/upload">Tekrar yükle</a>
-            <br><br>
-            <a href="/api/packs">Pack listesini aç</a>
-        </body>
-        </html>
-        """, count=len(uploaded), errors=errors)
+{% for filename in skipped %}
+<p>{{ filename }}</p>
+{% endfor %}
 
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="tr">
-    <head>
-        <meta charset="UTF-8">
-        <title>KeremHub Toplu Pack Yükleme</title>
-    </head>
-    <body>
-        <h1>KeremHub Pack Yükle</h1>
+{% endif %}
 
-        <p>İstediğin kadar ZIP seçebilirsin.</p>
+<br>
 
-        <form method="POST" enctype="multipart/form-data">
-            <input
-                type="file"
-                name="files"
-                accept=".zip"
-                multiple
-                required
-            >
+<a href="/upload">Başka klasör yükle</a>
 
-            <br><br>
+<br><br>
 
-            <button type="submit">
-                Packleri Yükle
-            </button>
-        </form>
-    </body>
-    </html>
-    """), filename=filename)
+<a href="/api/packs">Pack listesini aç</a>
+
+</body>
+</html>
+""", count=len(uploaded), skipped=skipped)
 
     return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="tr">
-    <head>
-        <meta charset="UTF-8">
-        <title>KeremHub Pack Upload</title>
-    </head>
-    <body>
-        <h1>KeremHub Pack Yükle</h1>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <form method="POST" enctype="multipart/form-data">
-            <input
-                type="file"
-                name="file"
-                accept=".zip"
-                required
-            >
+    <title>KeremHub Pack Upload</title>
+</head>
 
-            <button type="submit">
-                Pack Yükle
-            </button>
-        </form>
-    </body>
-    </html>
-    """)
+<body>
+
+<h1>KeremHub Pack Yükle</h1>
+
+<p>Pack klasörünü seç.</p>
+
+<p>Klasördeki tüm ZIP dosyaları otomatik yüklenecek.</p>
+
+<form
+    method="POST"
+    enctype="multipart/form-data"
+>
+
+<input
+    type="file"
+    name="files"
+    webkitdirectory
+    directory
+    multiple
+    required
+>
+
+<br><br>
+
+<button type="submit">
+    Klasördeki Packleri Yükle
+</button>
+
+</form>
+
+</body>
+</html>
+""")
 
 
-@app.route("/api/packs")
+@app.get("/api/packs")
 def api_packs():
     packs = []
 
-    for file in os.listdir(PACKS_FOLDER):
-        if not file.lower().endswith(".zip"):
+    for filename in os.listdir(PACKS_FOLDER):
+        if not filename.lower().endswith(".zip"):
             continue
 
-        path = os.path.join(PACKS_FOLDER, file)
-        name = os.path.splitext(file)[0]
+        path = os.path.join(PACKS_FOLDER, filename)
+        name = os.path.splitext(filename)[0]
 
         packs.append({
             "id": name,
             "name": name,
-            "pack_filename": file,
-            "author_name": CONFIG["author"],
+            "pack_filename": filename,
+            "author_name": CONFIG.get("author", "Kerem"),
             "author_id": "local",
             "showcase_path": f"/thumbnails/{name}.png",
             "pack_url": f"/api/packs/{name}/pack",
@@ -232,8 +248,6 @@ def api_packs():
             "approved_at": 0,
             "sha256": sha256_file(path)
         })
-
-    print("Toplam pack:", len(packs))
 
     return jsonify(packs)
 
@@ -273,14 +287,14 @@ def pack_request():
             "error": "not found"
         }), 404
 
-    file = os.path.basename(path)
-    name = os.path.splitext(file)[0]
+    filename = os.path.basename(path)
+    name = os.path.splitext(filename)[0]
 
     return jsonify({
         "id": name,
         "name": name,
-        "pack_filename": file,
-        "author_name": CONFIG["author"],
+        "pack_filename": filename,
+        "author_name": CONFIG.get("author", "Kerem"),
         "author_id": "local",
         "showcase_path": f"/thumbnails/{name}.png",
         "pack_url": f"/api/packs/{name}/pack",
@@ -353,6 +367,7 @@ def swords_pack(pack_id):
                 "w",
                 zipfile.ZIP_DEFLATED
             ) as target:
+
                 pack_mcmeta = {
                     "pack": {
                         "pack_format": 15,
@@ -409,10 +424,10 @@ def thumbnail(name):
 
     try:
         with zipfile.ZipFile(path, "r") as z:
-            for file in z.namelist():
-                if file.lower().endswith("pack.png"):
+            for filename in z.namelist():
+                if filename.lower().endswith("pack.png"):
                     return send_file(
-                        BytesIO(z.read(file)),
+                        BytesIO(z.read(filename)),
                         mimetype="image/png"
                     )
 
@@ -425,5 +440,10 @@ def thumbnail(name):
 if __name__ == "__main__":
     app.run(
         host=CONFIG.get("host", "0.0.0.0"),
-        port=int(os.environ.get("PORT", CONFIG.get("port", 8000)))
+        port=int(
+            os.environ.get(
+                "PORT",
+                CONFIG.get("port", 8000)
+            )
+        )
     )
