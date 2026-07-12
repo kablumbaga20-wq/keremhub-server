@@ -8,7 +8,9 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
-with open("config.json", "r", encoding="utf-8") as f:
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
 PACKS_FOLDER = CONFIG.get("packs_folder", "/tmp/packs")
