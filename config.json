@@ -4,6 +4,6 @@
     "server_name": "KeremHub",
     "author": "Kerem",
     "thumbnail_folder": "thumbnails",
-    "packs_folder": "packs",
+   "packs_folder": "packs",
     "builder_folder": "builder"
 }
