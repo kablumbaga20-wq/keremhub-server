@@ -1,23 +1,19 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, render_template_string
 import os
 import json
 import zipfile
 import hashlib
-import tempfile
 from io import BytesIO
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
 with open("config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
-# Belmo'da proje dizini read-only olabildiği için
-# yazılabilir geçici dizini kullanıyoruz.
-TEMP_FOLDER = tempfile.gettempdir()
-
-PACKS_FOLDER = "/tmp/packs"
-THUMBNAILS_FOLDER = "/tmp/thumbnails"
-BUILDER_FOLDER = "/tmp/builder"
+PACKS_FOLDER = CONFIG.get("packs_folder", "/tmp/packs")
+THUMBNAILS_FOLDER = CONFIG.get("thumbnail_folder", "/tmp/thumbnails")
+BUILDER_FOLDER = CONFIG.get("builder_folder", "/tmp/builder")
 
 os.makedirs(PACKS_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAILS_FOLDER, exist_ok=True)
@@ -78,18 +74,86 @@ def find_swords(z):
                 print("KILIC BULUNDU:", file)
 
     return found
+
+
 @app.get("/health")
 def health():
     return jsonify({
         "status": "ok"
     }), 200
+
+
 @app.route("/")
 def home():
     return jsonify({
         "name": CONFIG["server_name"],
-        "status": "online",
-        "packs_folder": PACKS_FOLDER
+        "packs_folder": PACKS_FOLDER,
+        "status": "online"
     })
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload_pack():
+    if request.method == "POST":
+        file = request.files.get("file")
+
+        if not file or not file.filename:
+            return "Dosya seçilmedi", 400
+
+        if not file.filename.lower().endswith(".zip"):
+            return "Sadece ZIP yüklenebilir", 400
+
+        filename = secure_filename(file.filename)
+
+        if not filename:
+            return "Geçersiz dosya adı", 400
+
+        path = os.path.join(PACKS_FOLDER, filename)
+
+        file.save(path)
+
+        return render_template_string("""
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <title>KeremHub</title>
+        </head>
+        <body>
+            <h1>Pack yüklendi!</h1>
+            <p>{{ filename }}</p>
+            <a href="/upload">Başka pack yükle</a>
+            <br>
+            <a href="/api/packs">Pack listesini aç</a>
+        </body>
+        </html>
+        """, filename=filename)
+
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <title>KeremHub Pack Upload</title>
+    </head>
+    <body>
+        <h1>KeremHub Pack Yükle</h1>
+
+        <form method="POST" enctype="multipart/form-data">
+            <input
+                type="file"
+                name="file"
+                accept=".zip"
+                required
+            >
+
+            <button type="submit">
+                Pack Yükle
+            </button>
+        </form>
+    </body>
+    </html>
+    """)
 
 
 @app.route("/api/packs")
@@ -242,7 +306,6 @@ def swords_pack(pack_id):
                 "w",
                 zipfile.ZIP_DEFLATED
             ) as target:
-
                 pack_mcmeta = {
                     "pack": {
                         "pack_format": 15,
@@ -269,13 +332,6 @@ def swords_pack(pack_id):
                     target.writestr(
                         "assets/minecraft/textures/item/" + output_name,
                         source.read(source_file)
-                    )
-
-                    print(
-                        "MINI PACKE EKLENDI:",
-                        source_file,
-                        "->",
-                        output_name
                     )
 
     except Exception as e:
@@ -320,9 +376,7 @@ def thumbnail(name):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", CONFIG.get("port", 8000)))
-
     app.run(
-        host="0.0.0.0",
-        port=port
+        host=CONFIG.get("host", "0.0.0.0"),
+        port=int(os.environ.get("PORT", CONFIG.get("port", 8000)))
     )
