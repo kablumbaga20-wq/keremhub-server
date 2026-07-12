@@ -95,22 +95,28 @@ def home():
 @app.route("/upload", methods=["GET", "POST"])
 def upload_pack():
     if request.method == "POST":
-        file = request.files.get("file")
+        files = request.files.getlist("files")
 
-        if not file or not file.filename:
-            return "Dosya seçilmedi", 400
+        uploaded = []
+        errors = []
 
-        if not file.filename.lower().endswith(".zip"):
-            return "Sadece ZIP yüklenebilir", 400
+        for file in files:
+            if not file or not file.filename:
+                continue
 
-        filename = secure_filename(file.filename)
+            if not file.filename.lower().endswith(".zip"):
+                errors.append(file.filename)
+                continue
 
-        if not filename:
-            return "Geçersiz dosya adı", 400
+            filename = secure_filename(file.filename)
 
-        path = os.path.join(PACKS_FOLDER, filename)
+            if not filename:
+                continue
 
-        file.save(path)
+            path = os.path.join(PACKS_FOLDER, filename)
+            file.save(path)
+
+            uploaded.append(filename)
 
         return render_template_string("""
         <!DOCTYPE html>
@@ -120,14 +126,55 @@ def upload_pack():
             <title>KeremHub</title>
         </head>
         <body>
-            <h1>Pack yüklendi!</h1>
-            <p>{{ filename }}</p>
-            <a href="/upload">Başka pack yükle</a>
-            <br>
+            <h1>Yükleme tamamlandı 🚀</h1>
+
+            <p>{{ count }} pack yüklendi.</p>
+
+            {% if errors %}
+                <h3>Yüklenemeyenler:</h3>
+
+                {% for file in errors %}
+                    <p>{{ file }}</p>
+                {% endfor %}
+            {% endif %}
+
+            <a href="/upload">Tekrar yükle</a>
+            <br><br>
             <a href="/api/packs">Pack listesini aç</a>
         </body>
         </html>
-        """, filename=filename)
+        """, count=len(uploaded), errors=errors)
+
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <title>KeremHub Toplu Pack Yükleme</title>
+    </head>
+    <body>
+        <h1>KeremHub Pack Yükle</h1>
+
+        <p>İstediğin kadar ZIP seçebilirsin.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <input
+                type="file"
+                name="files"
+                accept=".zip"
+                multiple
+                required
+            >
+
+            <br><br>
+
+            <button type="submit">
+                Packleri Yükle
+            </button>
+        </form>
+    </body>
+    </html>
+    """), filename=filename)
 
     return render_template_string("""
     <!DOCTYPE html>
